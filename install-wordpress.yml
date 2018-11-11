@@ -1,0 +1,76 @@
+---
+- hosts: wordpress_nodes
+  become: yes
+  vars:
+    user_name: "ec2-user"
+    blog_path: "/var/www/wp_mtopol"
+    database_name: "wp_mbal"
+    database_user: "user_wp_mtopol"
+    database_password: ''
+    database_host: 'localhost'
+    wordpress_archive_url: 'https://pl.wordpress.org/wordpress-4.9.8-pl_PL.tar.gz'
+  tasks:
+    - name: "install http server"
+      yum:
+        name: httpd
+        state: latest
+    - name: "install php module"
+      yum:
+        name: "{{ item }}"
+        state: latest
+      with_items:
+        - php
+        - php-mysql
+    - name: "install database server"
+      yum:
+        name: "{{ item }}"
+      with_items:
+        - mariadb
+        - mariadb-server
+    - service:
+        name: mariadb
+        state: started
+    - name: "Download wordpress"
+      get_url:
+        url: "{{wordpress_archive_url}}"
+        dest: ~/wordpress.tar.gz
+    - name: "create wordpress directory"
+      file:
+        path: "{{blog_path}}"
+        state: directory
+        remote_src: yes
+    - name: "unarchive wordpress"
+      unarchive:
+        src: ~/wordpress.tar.gz
+        dest: "{{blog_path}}"
+        remote_src: yes
+    - name: "install additional mysql python dependencies"
+      yum:
+        name: MySQL-python
+        state: present
+    - name: "create database"
+      mysql_db:
+        name: "{{database_name}}"
+        state: present
+    - name: "add database user"
+      mysql_user:
+        name: "{{database_user}}"
+        priv: '*.*:ALL'
+        state: present
+    - name: "configure apache vhost"
+      copy:
+        src: templates/vhosts.conf
+        dest: /etc/httpd/conf.d/blog.conf
+    - name: "start httpd server"
+      service:
+        name: httpd
+        state: restarted
+    - name: "copy wordpress config"
+      template:
+        src: templates/wp-config.php
+        dest: "{{blog_path}}/wp-config.php"
+        owner: "{{user_name}}"
+        group: "{{user_name}}"
+        
+          
+        
